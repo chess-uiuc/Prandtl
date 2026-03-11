@@ -14,10 +14,15 @@ option(BUILD_TESTING "Build unit tests" ON)
 option(PARABOLIC "Enable Compressible Navier-Stokes Solver" OFF)
 option(SUBCELL_FV_BLENDING "Enable subcell blending" ON)
 option(AXISYMMETRIC "Enable Axisymmetric domain solver" OFF)
+option(SUTHERLAND "Enable Sutherland transport model" OFF)
 
 find_package(MPI REQUIRED)
 include_directories(${MPI_CXX_INCLUDE_PATH})
 set(MPI_CXX_LIBRARIES ${MPI_CXX_LIBRARIES})
+
+# Find Mutation++
+find_package(mutation++ REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 message(STATUS "MPI CXX COMPILER: ${MPI_CXX_COMPILER}")
 message(STATUS "MPI INCLUDE PATH: ${MPI_INCLUDE_PATH}")
@@ -63,6 +68,11 @@ if(SUBCELL_FV_BLENDING)
   target_compile_definitions(${PROJECT_NAME} PRIVATE SUBCELL_FV_BLENDING)
 endif()
 
+if(SUTHERLAND)
+  message(STATUS "Building Prandtl with: Sutherland transport model enabled")
+  target_compile_definitions(${PROJECT_NAME} PRIVATE SUTHERLAND)
+endif()
+
 if(AXISYMMETRIC)
   message(STATUS "Building Prandtl with: Axisymmetric domain enabled")
   target_compile_definitions(${PROJECT_NAME} PRIVATE AXISYMMETRIC)
@@ -106,6 +116,7 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC ${CMAKE_SOURCE_DIR}/libs/metis-5.1.0/include
     PUBLIC ${CMAKE_SOURCE_DIR}/src/Operators/NonlinearForm
     PUBLIC ${CMAKE_SOURCE_DIR}/src/Operators
+    PUBLIC ${CMAKE_SOURCE_DIR}/src/Device
     PUBLIC ${CMAKE_SOURCE_DIR}/src/RiemannSolvers
     PUBLIC ${CMAKE_SOURCE_DIR}/src/BasicOperations
     PUBLIC ${CMAKE_SOURCE_DIR}/src/Filters
@@ -149,7 +160,8 @@ target_link_directories(${PROJECT_NAME}
     PUBLIC ${CMAKE_SOURCE_DIR}/libs/metis-5.1.0/lib
     )
 
-target_link_libraries(${PROJECT_NAME} mfem HYPRE metis MPI::MPI_CXX)
+target_link_libraries(${PROJECT_NAME} mfem HYPRE metis mutation++::mutation++ MPI::MPI_CXX Eigen3::Eigen)
+
 
 if (BUILD_TESTING)
   include(CTest)
