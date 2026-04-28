@@ -178,9 +178,9 @@ TEST(LTEGasEOS_Tablelookup_test)
 TEST(LTEGasEOS_BilinearInterpolation_test)
 {
     // Range and resolution of the table (Evenly spaced table in this test)
-    int nx = 11, ny = 11;
+    int nx = 11, ny = 1001;
     real_t rho_min  = 0.5  , rho_max  = 1.5  , rho_step  = (rho_max-rho_min)/(nx-1);
-    real_t rhoe_min = 2.0e5, rhoe_max = 1.1e6, rhoe_step = (rhoe_max-rhoe_min)/(ny-1);
+    real_t e_min = 2.0e5, e_max = 1.2e6, e_step = (e_max-e_min)/(ny-1);
 
     // Mutation++ object for Equilibrium state
     MixtureOptions opts("air_5");          // Gas-Mixture (N, O, NO, N2, O2)
@@ -195,7 +195,7 @@ TEST(LTEGasEOS_BilinearInterpolation_test)
 
     // Data arrays for table lookup for LTE properties
     mfem::Vector lte_table( (num_properties) * (nx*ny) ); // LTE-Tables
-    mfem::Vector rho_grid(nx), rhoe_grid(ny); // 1-D grids of rho and rhoE
+    mfem::Vector rho_grid(nx), e_grid(ny); // 1-D grids of rho and rhoE
 
     StateLayout L(dim, ndofs, nx, ny);
     const int num_eq = L.eq_energy + 1;
@@ -203,14 +203,15 @@ TEST(LTEGasEOS_BilinearInterpolation_test)
 
     // Populating the 1D grid of density and rho*internal energy
     for(int ind_x=0; ind_x < nx; ind_x++) rho_grid[ind_x] = rho_min + ind_x * rho_step;
-    for(int ind_y=0; ind_y < ny; ind_y++) rhoe_grid[ind_y] = rhoe_min + ind_y * rhoe_step;
+    for(int ind_y=0; ind_y < ny; ind_y++) e_grid[ind_y] = e_min + ind_y * e_step + mix.mixtureHMass(0.0000001);
 
     // Generation of LTE table
     for(int ind_y=0; ind_y < ny; ind_y++)
     {
         for(int ind_x=0; ind_x < nx; ind_x++)
         {
-            mix.setState(&rho_grid[ind_x], &rhoe_grid[ind_y], 0);
+            real_t rhoe = rho_grid[ind_x] * e_grid[ind_y];
+            mix.setState(&rho_grid[ind_x], &rhoe, 0);
             lte_table[L.lte_property_index(L.P_idx, ind_x, ind_y)] = mix.P();
             lte_table[L.lte_property_index(L.T_idx, ind_x, ind_y)] = mix.T();
         }
@@ -218,12 +219,12 @@ TEST(LTEGasEOS_BilinearInterpolation_test)
 
     // Setup the LTE EOS
     std::shared_ptr<PhysicsConstants> phys =
-      std::make_shared<PhysicsConstants>(lte_table.Read(), rho_grid.Read(), rhoe_grid.Read());
+      std::make_shared<PhysicsConstants>(lte_table.Read(), rho_grid.Read(), e_grid.Read());
 
     // Testing Bi-linear Interpolation 
     // A (Choosing one corner)
-    real_t rho  = 0.7;
-    real_t rhoe = 560000.0;
+    real_t rho  = rho_grid[5];
+    real_t rhoe = rho*(e_grid[5]);
     const real_t u1[3] = {10.0, -3.0, 5.0};
 
     std::vector<real_t> U(num_eq * ndofs);
@@ -237,14 +238,18 @@ TEST(LTEGasEOS_BilinearInterpolation_test)
     real_t P_true = mix.P();
     real_t T_true = mix.T();
 
-    EXPECT_CLOSE(P_true, P_interpolated, 1e-6);
-    EXPECT_CLOSE(T_true, T_interpolated, 1e-6);
+    std::cout << "P_true - P_table: " << (P_true - P_interpolated)/P_true << std::endl;
+    std::cout << "T_true - T_table: " << (T_true - T_interpolated)/T_true << std::endl;
+
+    EXPECT_CLOSE(P_true/P_true, P_interpolated/P_true, 1e-12);
+    EXPECT_CLOSE(T_true/T_true, T_interpolated/T_true, 1e-12);
 
 
     // Testing Bi-linear Interpolation 
     // B (Mid point of a cell)
     rho  = 0.75;
-    rhoe = 605000.0;
+    real_t e = (e_grid[5] + e_grid[6])/2.0;
+    rhoe = rho*e;
     
     fill_single_dof_state(L, U, dim, rho, u1, rhoe);
     DofStateView S2(U.data(), 0);
@@ -252,7 +257,7 @@ TEST(LTEGasEOS_BilinearInterpolation_test)
     P_interpolated = eos.pressure(*phys, L, S2);
     T_interpolated = eos.temperature(*phys, L, S2);
 
-    int l_x = hunt(rho_grid.Read(), nx, rho, 0), l_y = hunt(rhoe_grid.Read(), ny, rhoe, 0);
+    int l_x = hunt(rho_grid.Read(), nx, rho, 0), l_y = hunt(e_grid.Read(), ny, e, 0);
 
     P_true = 0;
     T_true = 0;
@@ -270,6 +275,26 @@ TEST(LTEGasEOS_BilinearInterpolation_test)
 
     EXPECT_CLOSE(P_true, P_interpolated, 0.0);
     EXPECT_CLOSE(T_true, T_interpolated, 0.0);
+
+    // Testing the accuracy of this approach at an arbitary point
+    rho = 0.2*rho_grid[5] + 0.8*rho_grid[6];
+    e = 0.3*e_grid[5] + 0.7*e_grid[6];
+    rhoe = rho*e;
+
+    fill_single_dof_state(L, U, dim, rho, u1, rhoe);
+    DofStateView S3(U.data(), 0);
+    P_interpolated = eos.pressure(*phys, L, S3);
+    T_interpolated = eos.temperature(*phys, L, S3);
+
+    mix.setState(&rho, &rhoe, 0);
+    P_true = mix.P();
+    T_true = mix.T();
+
+    std::cout << "P_true - P_table: " << (P_true - P_interpolated)/P_true << std::endl;
+    std::cout << "T_true - T_table: " << (T_true - T_interpolated)/T_true << std::endl;
+
+    EXPECT_CLOSE(P_true/P_true, P_interpolated/P_true, 1e-7);
+    EXPECT_CLOSE(T_true/T_true, T_interpolated/T_true, 1e-7);
 
     return 0;
 }
@@ -296,14 +321,14 @@ TEST(InverseLTETable_test)
     // Range and resolution of the table (Evenly spaced table in this test)
     int nx = 100, ny = 100;
     real_t rho_min  = 0.5  , rho_max  = 1.5  , rho_step  = (rho_max-rho_min)/(nx-1);
-    real_t rhoe_min = 2.0e5, rhoe_max = 1.1e6, rhoe_step = (rhoe_max-rhoe_min)/(ny-1);
+    real_t e_min = 2.0e5, e_max = 2.0e6, e_step = (e_max-e_min)/(ny-1);
 
     int num_properties = 9;
     const int dim = 3, ndofs = 1;
 
     // Data arrays for table lookup for LTE properties
     mfem::Vector lte_table( (num_properties) * (nx*ny) ); // LTE-Tables
-    mfem::Vector rho_grid(nx), rhoe_grid(ny); // 1-D grids of rho and rhoE
+    mfem::Vector rho_grid(nx), e_grid(ny); // 1-D grids of rho and e
 
     StateLayout L(dim, ndofs, nx, ny);
     const int num_eq = L.eq_energy + 1;
@@ -311,26 +336,26 @@ TEST(InverseLTETable_test)
 
     // Populating the 1D grid of density and rho*internal energy
     for(int ind_x=0; ind_x < nx; ind_x++) rho_grid[ind_x] = rho_min + ind_x * rho_step;
-    for(int ind_y=0; ind_y < ny; ind_y++) rhoe_grid[ind_y] = rhoe_min + ind_y * rhoe_step;
+    for(int ind_y=0; ind_y < ny; ind_y++) e_grid[ind_y] = e_min + ind_y * e_step + mix1.mixtureHMass(0.0000001);
 
     // Generation of LTE table
     for(int ind_y=0; ind_y < ny; ind_y++)
     {
         for(int ind_x=0; ind_x < nx; ind_x++)
         {
-            mix1.setState(&rho_grid[ind_x], &rhoe_grid[ind_y], 0);
+            mix1.setState(&rho_grid[ind_x], &e_grid[ind_y], 0);
             lte_table[L.lte_property_index(L.P_idx, ind_x, ind_y)] = mix1.P();
             lte_table[L.lte_property_index(L.T_idx, ind_x, ind_y)] = mix1.T();
         }
     }
 
     std::shared_ptr<PhysicsConstants> phys =
-      std::make_shared<PhysicsConstants>(lte_table.Read(), rho_grid.Read(), rhoe_grid.Read());
+      std::make_shared<PhysicsConstants>(lte_table.Read(), rho_grid.Read(), e_grid.Read());
 
     // -------------------------------- LTE TABLE Look-up --------------------------
 
     real_t rho_true  = 0.753;
-    real_t rhoe_true = 580000.0;
+    real_t rhoe_true = rho_true * (580000.0 + mix1.mixtureHMass(0.0000001)); 
     const real_t u1[3] = {10.0, -3.0, 5.0};
 
     std::vector<real_t> U(num_eq * ndofs);
@@ -358,11 +383,50 @@ TEST(InverseLTETable_test)
     EXPECT_CLOSE(rho_true, rho_inverse_interp, 1e-5);
 
     // TEST 3 - Obtaining internal energy from the from pressure (inverse table lookup)
-    real_t rhoe_new = 700000.0;
+    real_t rhoe_new = rho_true*( 700000.0 + mix1.mixtureHMass(0.0000001) ); // Initial guess for rho*e
     fill_single_dof_state(L, U, dim, rho_true, u1, rhoe_new);
     PointStateView S(U.data());
     real_t rhoe_inverse = eos.internal_energy_from_pressure(*phys, L, S, P_interpolated);
     EXPECT_CLOSE(rhoe_true, rhoe_inverse, 1e-8);
+
+    return 0;
+}
+
+TEST(LTETable_diagnostics_test)
+{
+    MixtureOptions opts("air_5");
+    opts.setStateModel("Equil");
+    opts.setThermodynamicDatabase("RRHO");
+    opts.setViscosityAlgorithm("Chapmann-Enskog_LDLT");
+    Mixture mix1(opts);
+    mix1.addComposition("N:0.79, O:0.21", true);
+
+    MixtureOptions opts2("air_5");
+    opts2.setStateModel("EquilTP");
+    opts2.setThermodynamicDatabase("RRHO");
+    Mixture mix2(opts2);
+    mix2.addComposition("N:0.79, O:0.21", true);
+
+    double T = 8500.0;
+    double P = 1e6;
+
+    for(double T = 5000.0; T <= 8000.0; T += 1000.0){
+        for(double P = 1e5; P <= 1e6; P *= 10){
+            mix2.setState(&T, &P);
+            double rho = mix2.density();
+            double rhoe = rho * mix2.mixtureEnergyMass();
+
+            // std::cout << "(T,P) = " << "(" << T << ", " << P << ")" << std::endl;
+            // CL ALERT : For T>= 8500 K and P >= 1e6 no solution is obtained from Mutation++ using (rho, rhoe)
+            mix1.setState(&rho, &rhoe, 0);
+            double P_recovered = mix1.P();
+            double T_recovered = mix1.T();
+
+            EXPECT_CLOSE(P, P_recovered, 1e-5);
+            EXPECT_CLOSE(T, T_recovered, 1e-8);
+        }
+    }
+
 
     return 0;
 }

@@ -215,6 +215,7 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC ${CMAKE_SOURCE_DIR}/TestCases/Euler/2D/Ramp
     PUBLIC ${CMAKE_SOURCE_DIR}/TestCases/Euler/2D/Nagashima_Ramjet
     PUBLIC ${CMAKE_SOURCE_DIR}/TestCases/LTE/Euler/LTEVortex
+    PUBLIC ${CMAKE_SOURCE_DIR}/TestCases/LTE/Euler/LTEBlob
     )
 
 target_link_libraries(${PROJECT_NAME}

@@ -115,13 +115,13 @@ private:
   std::unique_ptr<mfem::Device> device_;
 
 #ifdef LTE_EOS
-  int    N_rho, N_rhoe;
-  real_t rho_min, rho_max, rhoe_min, rhoe_max;
+  int    N_rho, N_e;
+  real_t rho_min, rho_max, e_min, e_max;
   std::string gas_mixture, gas_composition;
-  mfem::Vector rho_grid, rhoe_grid, lte_table;
+  mfem::Vector rho_grid, e_grid, lte_table;
 
   void fill_lte_table(Mutation::Mixture& mix, const StateLayout& stateLayout, const real_t* rho_grid,
-                      const real_t* rhoe_grid, real_t* lte_table, MPI_Comm comm) const;
+                      const real_t* e_grid, real_t* lte_table, MPI_Comm comm) const;
 #endif
 
 #ifdef AXISYMMETRIC

@@ -78,7 +78,7 @@ namespace Prandtl
     inline real_t internal_energy_from_pressure(const PhysicsConstants &phys, const StateLayout &L,
                                                 const StateView &S, real_t pressure_target) const
     {
-      real_t U[L.eq_energy + 1]; // CL NOTE : Need a MACRO for size
+      real_t U[L.nequations()];
       PointStateViewRW S_dummy(U);
       S_dummy.set_mass(L, S.mass(L));
       for(int idim = 0; idim < L.dim; idim++)
@@ -90,8 +90,8 @@ namespace Prandtl
       // Secant Method to find internal energy that matches a target pressure
       real_t tol   = 1e-12;
       real_t denom = 0.0;
-      real_t ie_old = internal_energy_density(phys, L, S);
-      real_t ie_new = ie_old*1.01 + 1e-12;
+      real_t ie_old = pressure_target * 3; // initial guess for internal energy (CL NOTE : make sure this is inside the table range)
+      real_t ie_new = ie_old*1.01 + tol;
 
       real_t ke = kinetic_energy_density(phys, L, S);
 
@@ -117,7 +117,7 @@ namespace Prandtl
         ie_old = ie_new;
         ie_new = ie_update;
       }
-
+      MFEM_ASSERT(iter < 100, "Secant method did not converge in internal_energy_from_pressure");
       return ie_new;
     }
 
@@ -303,12 +303,12 @@ namespace Prandtl
 
       // Point rho and rhoe values
       real_t rho  = density(phys, L, S);
-      real_t rhoe = internal_energy_density(phys, L, S);      
+      real_t e = specific_internal_energy(phys, L, S);
 
       // CL NOTE : Find a way to make a good first guess of l_x and l_y (because we are not storing it in cache)
 
       // Get the lower and upper x and y indices of the cell
-      int l_y = hunt(phys.rhoe_grid, L.ny, rhoe, 0);
+      int l_y = hunt(phys.e_grid, L.ny, e, 0);
       int l_x = hunt(phys.rho_grid, L.nx, rho, 0);
       int u_x = l_x + 1  , u_y = l_y + 1;
 
@@ -317,13 +317,13 @@ namespace Prandtl
         std::cout << " CL ALERT : Out of bounds in LTE table lookup! "<<std::endl;
         std::cout << "l_x : " << l_x << "l_y : " << l_y << std::endl;
         std::cout << "rho : " << phys.rho_grid[0] << " < " << rho << " < " << phys.rho_grid[L.nx-1] << std::endl;
-        std::cout << "rhoe : " << phys.rhoe_grid[0] << " < " << rhoe << " < " << phys.rhoe_grid[L.ny-1] << std::endl;
+        std::cout << "e : " << phys.e_grid[0] << " < " << e << " < " << phys.e_grid[L.ny-1] << std::endl;
         std::exit(1);
       }
 
       // Get the lower and upper x and y coordinates of the cell
       real_t rho_l  = phys.rho_grid[l_x] , rho_u = phys.rho_grid[u_x];
-      real_t rhoe_l = phys.rhoe_grid[l_y], rhoe_u = phys.rhoe_grid[u_y];
+      real_t e_l = phys.e_grid[l_y], e_u = phys.e_grid[u_y];
 
       // Get the corner property values
       real_t Q00 = phys.lte_table[L.lte_property_index(property_idx, l_x, l_y)];
@@ -333,7 +333,7 @@ namespace Prandtl
 
 
       real_t wx = (rho  - rho_l)  / (rho_u - rho_l);
-      real_t wy = (rhoe - rhoe_l) / (rhoe_u - rhoe_l);
+      real_t wy = (e - e_l) / (e_u - e_l);
 
 
       // Clamp to [0, 1]

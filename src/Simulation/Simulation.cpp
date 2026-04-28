@@ -27,6 +27,7 @@
 #include "Nagashima_Ramjet.hpp"
 
 #include "LTEVortex.hpp"
+#include "LTEBlob.hpp"
 
 #include "json.hpp"
 #include <filesystem>
@@ -354,24 +355,21 @@ void Simulation::LoadConfig(const std::string &config_file_path)
     int num_properties = 9; // CL NOTE : Check LTE EOS
 
     gas_mixture = runtime.value("gas_mixture", "air_5");
-    gas_composition = runtime.value("gas_composition", "N:0.8, O:0.2");
+    gas_composition = runtime.value("gas_composition", "N:0.79, O:0.21");
 
     N_rho    = runtime.value("N_rho", 100);
-    N_rhoe   = runtime.value("N_rhoe", 100);
+    N_e   = runtime.value("N_e", 100);
     rho_min  = runtime.value("rho_min", 0.9);
     rho_max  = runtime.value("rho_max", 1.1);
-    rhoe_min = runtime.value("rhoe_min", 100000.0);
-    rhoe_max = runtime.value("rhoe_max", 1000000.0);
+    e_min = runtime.value("e_min", 100000.0);
+    e_max = runtime.value("e_max", 1000000.0);
 
     rho_grid.SetSize(N_rho);
-    rhoe_grid.SetSize(N_rhoe);
-    lte_table.SetSize(N_rho * N_rhoe * num_properties);
+    e_grid.SetSize(N_e);
+    lte_table.SetSize(N_rho * N_e * num_properties);
 
     real_t rho_step = (rho_max - rho_min) / (N_rho - 1);
-    real_t rhoe_step = (rhoe_max - rhoe_min) / (N_rhoe - 1);
-
-    for(int ind_x=0; ind_x < N_rho; ind_x++) rho_grid[ind_x] = rho_min + ind_x * rho_step;
-    for(int ind_y=0; ind_y < N_rhoe; ind_y++) rhoe_grid[ind_y] = rhoe_min + ind_y * rhoe_step;
+    real_t e_step = (e_max - e_min) / (N_e - 1);
 
     // Generate LTE table using Mutation++
     Mutation::MixtureOptions opts(gas_mixture);
@@ -381,14 +379,17 @@ void Simulation::LoadConfig(const std::string &config_file_path)
     Mutation::Mixture mix(opts);                        // Initializing mixture object
     mix.addComposition(gas_composition.c_str(), true);           // composition
 
-    stateLayout = std::make_shared<StateLayout>(dim, num_dofs_scalar, N_rho, N_rhoe);
+    for(int ind_x=0; ind_x < N_rho; ind_x++) rho_grid[ind_x] = rho_min + ind_x * rho_step;
+    for(int ind_y=0; ind_y < N_e; ind_y++) e_grid[ind_y] = e_min + ind_y * e_step + mix.mixtureHMass(0.0000001);
+
+    stateLayout = std::make_shared<StateLayout>(dim, num_dofs_scalar, N_rho, N_e);
 
     lte_table = 0.0;
-    fill_lte_table(mix, *stateLayout, rho_grid.GetData(), rhoe_grid.GetData(), lte_table.GetData(), pmesh->GetComm());
+    fill_lte_table(mix, *stateLayout, rho_grid.GetData(), e_grid.GetData(), lte_table.GetData(), pmesh->GetComm());
 
-    MPI_Allreduce(MPI_IN_PLACE, lte_table.GetData(), N_rho * N_rhoe * num_properties, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+    MPI_Allreduce(MPI_IN_PLACE, lte_table.GetData(), N_rho * N_e * num_properties, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
 
-    physicsConstants = std::make_shared<PhysicsConstants>(lte_table.HostRead(), rho_grid.HostRead(), rhoe_grid.HostRead());
+    physicsConstants = std::make_shared<PhysicsConstants>(lte_table.HostRead(), rho_grid.HostRead(), e_grid.HostRead());
     gasModel = std::make_shared<ActiveGasModel>(*physicsConstants, *stateLayout, LTEGasEOS{}, LTETransport{});
 #else
     physicsConstants = std::make_shared<PhysicsConstants>(
@@ -403,7 +404,7 @@ void Simulation::LoadConfig(const std::string &config_file_path)
 
     flux = std::make_shared<NavierStokesFlux>(*gasModel);
     if (runtime["numerical_flux"].get<std::string>() == "Chandrashekar"){
-      numericalFlux = std::make_shared<ChandrashekarFlux>(*flux, *gasModel);
+      numericalFlux = std::make_shared<LaxFriedrichsFlux>(*flux, *gasModel);
     } else {
       std::cerr << "Error: Invalid numerical flux specified." << std::endl;
       return;
@@ -1305,7 +1306,7 @@ void Simulation::ConservativeToPrimitive(const Vector &U_cons,
 
 #ifdef LTE_EOS
 void Simulation::fill_lte_table(Mutation::Mixture& mix, const StateLayout& stateLayout,
-                                const real_t* rho_grid, const real_t* rhoe_grid,
+                                const real_t* rho_grid, const real_t* e_grid,
                                 real_t* lte_table, MPI_Comm comm) const
 {
     int myRank, numProcs;
@@ -1323,8 +1324,9 @@ void Simulation::fill_lte_table(Mutation::Mixture& mix, const StateLayout& state
     {
         int i = k / stateLayout.ny;
         int j = k % stateLayout.ny;
+        double rhoe = rho_grid[i] * e_grid[j];
 
-        mix.setState(&rho_grid[i], &rhoe_grid[j], 0);
+        mix.setState(&rho_grid[i], &rhoe, 0);
         lte_table[stateLayout.lte_property_index(stateLayout.P_idx, i, j)] = mix.P();
         lte_table[stateLayout.lte_property_index(stateLayout.T_idx, i, j)] = mix.T();
         lte_table[stateLayout.lte_property_index(stateLayout.s_idx, i, j)] = mix.mixtureSMass();

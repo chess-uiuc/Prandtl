@@ -5,12 +5,11 @@
 namespace Prandtl
 {
 
-// Isentropic Vortex initial condition
-std::function<void(const Vector&, Vector&)> LTEVortexIC(real_t radius,
-                                                        real_t vel_inf,
-                                                        real_t rho_inf,
+// LTE Blob initial condition
+std::function<void(const Vector&, Vector&)> LTEBlobIC(real_t radius,
                                                         real_t T_inf,
-                                                        real_t T_blob)
+                                                        real_t T_blob,
+                                                        real_t P_inf)
 {
     return [=](const Vector &x, Vector &y)
     {
@@ -24,12 +23,11 @@ std::function<void(const Vector&, Vector&)> LTEVortexIC(real_t radius,
 
         real_t r2rad = (dx*dx + dy*dy) / (radius * radius);
 
-        const real_t exp_half = std::exp(-0.5 * r2rad);
         const real_t exp_full = std::exp(-r2rad);
 
-        // Vortex velocity field
-        const real_t velX = vel_inf * (1.0 - dy / radius * exp_half);
-        const real_t velY = vel_inf * (      dx / radius * exp_half);
+        // Quiescent velocity field
+        const real_t velX = 0.0;
+        const real_t velY = 0.0;
         const real_t vel2 = velX * velX + velY * velY;
 
         // Gaussian temperature perturbation
@@ -38,15 +36,13 @@ std::function<void(const Vector&, Vector&)> LTEVortexIC(real_t radius,
         // LTE mixture using Mutation++
         Mutation::MixtureOptions opts("air_5");
         opts.setStateModel("EquilTP");
-        opts.setThermodynamicDatabase("RRHO");              // Default thermodynamic data base
-        Mutation::Mixture mix(opts);                        // Initializing mixture object
+        opts.setThermodynamicDatabase("RRHO");
+        Mutation::Mixture mix(opts);
         mix.addComposition("N:0.79, O:0.21", true);
 
-        real_t P_inf = 100000.0;
+        mix.setState(&T, &P_inf);
 
-        mix .setState(&T, &P_inf);
-
-        const real_t den = mix.density();
+        const real_t den  = mix.density();
         const real_t rhoe = den * mix.mixtureEnergyMass();
         const real_t rhoE = rhoe + 0.5 * den * vel2;
 
@@ -58,15 +54,15 @@ std::function<void(const Vector&, Vector&)> LTEVortexIC(real_t radius,
 }
 
 // Registration helper that automatically registers these functions
-struct RegisterLTEVortex
+struct RegisterLTEBlob
 {
-    RegisterLTEVortex()
+    RegisterLTEBlob()
     {
         // Register initial condition.
-        ConditionFactory::Instance().RegisterInitialCondition5("LTEVortexIC", LTEVortexIC);
+        ConditionFactory::Instance().RegisterInitialCondition4("LTEBlobIC", LTEBlobIC);
     }
 };
 // Global static instance to ensure registration happens at startup.
-static RegisterLTEVortex regLTEVortex;
+static RegisterLTEBlob regLTEBlob;
 
 }

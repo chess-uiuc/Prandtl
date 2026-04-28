@@ -12,7 +12,8 @@
 
 namespace Prandtl
 {
-
+  constexpr int MAXEQ  = 5;
+  constexpr int MAXDIM = 3;
 #ifdef MFEM_USE_SINGLE
   using real_t = float;
 #else
@@ -23,6 +24,7 @@ namespace Prandtl
     MFEM_HOST_DEVICE inline real_t rmax(real_t a, real_t b) { return a > b ? a : b; }
     MFEM_HOST_DEVICE inline real_t rsqrt(real_t x) { return std::sqrt(x); }  // mfem::sqrt?
     MFEM_HOST_DEVICE inline real_t rlog(real_t x)  { return std::log(x); }   // mfe::log?
+    MFEM_HOST_DEVICE inline real_t rabs(real_t x) { return std::abs(x);}
     
     MFEM_HOST_DEVICE
     inline void ComputeMeanVec(const real_t* a, const real_t* b, real_t* out, int n)
