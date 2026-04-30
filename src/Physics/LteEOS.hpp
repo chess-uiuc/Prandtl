@@ -116,8 +116,10 @@ namespace Prandtl
 
         ie_old = ie_new;
         ie_new = ie_update;
+        if(iter == 99){
+          MFEM_ABORT("Secant method did not converge in internal_energy_from_pressure");
+        }
       }
-      MFEM_ASSERT(iter < 100, "Secant method did not converge in internal_energy_from_pressure");
       return ie_new;
     }
 
