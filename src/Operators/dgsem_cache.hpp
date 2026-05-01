@@ -2,11 +2,12 @@
 
 #include "mfem.hpp"
 #include "GasModel.hpp"
-#include "ChandrashekarFlux.hpp"
 #include "bc_cache_utilities.hpp"
+#include "LaxFriedrichsFlux.hpp"
 
 namespace Prandtl
 {
+  
     struct DGSEMOperatorCache {
       // constants needed by kernels
       int p = 0;
@@ -67,8 +68,10 @@ namespace Prandtl
       mutable mfem::Vector elWaveSpeed; // size nelements
       mutable mfem::Vector ifWaveSpeed; // size ninterior faces
       mutable mfem::Vector bndWaveSpeed; // size nbnd faces
-      Prandtl::IdealGasModel gas;
-      Prandtl::ChandrashekarFlux::InviscidFlux iflux;
+      ActiveGasModel gas;
+      //ActivePhysics::InviscidFlux iflux;
+      // Prandtl::ChandrashekarFlux::InviscidFlux iflux;
+      Prandtl::LaxFriedrichsFlux::InviscidFlux iflux;
 
 #ifdef SUBCELL_FV_BLENDING
       mfem::Vector subcellMetricXi;
@@ -92,6 +95,7 @@ namespace Prandtl
     };
 
   struct DGSEMDeviceCache {
+
     int p = 0;
     int dim = 0;
     int num_elements = 0;
@@ -134,8 +138,11 @@ namespace Prandtl
     real_t *elWaveSpeed_d = nullptr;
     real_t *ifWaveSpeed_d = nullptr;
     real_t *bndWaveSpeed_d = nullptr;
-    Prandtl::IdealGasModel gas;
-    Prandtl::ChandrashekarFlux::InviscidFlux iflux;
+    IdealGasModel gas;
+    //ActivePhysics::InviscidFlux iflux;
+
+    // Prandtl::ChandrashekarFlux::InviscidFlux iflux;
+    Prandtl::LaxFriedrichsFlux::InviscidFlux iflux;
 
 #ifdef SUBCELL_FV_BLENDING
     const real_t *subcell_metric_xi_d = nullptr;

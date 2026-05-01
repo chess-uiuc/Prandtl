@@ -391,16 +391,26 @@ void Simulation::LoadConfig(const std::string &config_file_path)
     }
 
     stateLayout = std::make_shared<StateLayout>(dim, num_dofs_scalar);
-    gasModel = std::make_shared<IdealGasModel>(*physicsConstants, *stateLayout);
+    gasModel = std::make_shared<ActiveGasModel>(*physicsConstants, *stateLayout);
 
+    // DEVICE: numerical flux must be set at *compile* time
+    //         
+    // HOST-ONLY: numerical flux type selection at runtime with:
     flux = std::make_shared<NavierStokesFlux>(*gasModel);
-    if (runtime["numerical_flux"].get<std::string>() == "Chandrashekar"){
+    std::string numflux_type(runtime["numerical_flux"].get<std::string>());
+    if (numflux_type == "Chandrashekar"){
       numericalFlux = std::make_shared<ChandrashekarFlux>(*flux, *gasModel);
+    } else if (numflux_type == "LLF"){
+      numericalFlux = std::make_shared<LaxFriedrichsFlux>(*flux, *gasModel);
+    } else if (numflux_type == "HLL"){
+      numericalFlux = std::make_shared<HLLFlux>(*flux, *gasModel);
     } else {
       std::cerr << "Error: Invalid numerical flux specified." << std::endl;
       return;
     }
-
+    if(Mpi::Root() && !use_device_path){
+      std::cout << "Inviscid Numerical Flux: " << numflux_type << std::endl;
+    }
     if(myRank == 0 && debug_simulation){
       std::cout << "StateLayout and GasModel created." << std::endl;
     }
