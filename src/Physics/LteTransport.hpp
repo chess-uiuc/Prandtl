@@ -26,7 +26,7 @@ namespace Prandtl
       const real_t T0pTs = phys.T0 + phys.Ts;
       return phys.mu0 * T0pTs * Trel * std::sqrt(Trel) / (temptr + phys.Ts);
 #else
-      return eos.bilinear_interpolate(L.mu_idx, phys, L, S);
+      return eos.property_lookup(L.mu_idx, phys, L, S);
 #endif
     }
 
@@ -44,7 +44,7 @@ namespace Prandtl
     inline real_t thermal_conductivity(const PhysicsConstants &phys, const StateLayout &L,
                                        const EOSType &eos, const StateViewType &S) const
     {
-      return eos.bilinear_interpolate(L.lambda_idx, phys, L, S);
+      return eos.property_lookup(L.lambda_idx, phys, L, S);
     }
   };
   // TODO: Consider refactoring; would be better (explicit) design

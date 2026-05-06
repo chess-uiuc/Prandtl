@@ -19,7 +19,7 @@ namespace Prandtl
     inline real_t R_gas(const PhysicsConstants &phys, const StateLayout &L,
                         const StateView &S) const
     {
-      return bilinear_interpolate(L.R_eq_idx, phys, L, S);
+      return property_lookup(L.R_eq_idx, phys, L, S);
     }
  
     template<typename StateView>
@@ -81,6 +81,7 @@ namespace Prandtl
       real_t U[L.nequations()];
       PointStateViewRW S_dummy(U);
       S_dummy.set_mass(L, S.mass(L));
+
       for(int idim = 0; idim < L.dim; idim++)
       {
         S_dummy.set_momentum(L, idim, S.momentum(L, idim));
@@ -100,10 +101,10 @@ namespace Prandtl
       for(int iter = 0; iter < 100; iter++)
       {
         S_dummy.set_energy(L, ie_old+ke);
-        f_old = bilinear_interpolate(L.P_idx, phys, L, S_dummy) - pressure_target;
+        f_old = property_lookup(L.P_idx, phys, L, S_dummy) - pressure_target;
 
         S_dummy.set_energy(L, ie_new+ke);
-        f_new = bilinear_interpolate(L.P_idx, phys, L, S_dummy) - pressure_target;
+        f_new = property_lookup(L.P_idx, phys, L, S_dummy) - pressure_target;
 
         denom = f_new - f_old;
 
@@ -141,7 +142,7 @@ namespace Prandtl
     inline real_t pressure(const PhysicsConstants &phys, const StateLayout &L,
                            const StateView &S) const
     {
-      return bilinear_interpolate(L.P_idx, phys, L, S);
+      return property_lookup(L.P_idx, phys, L, S);
     }
 
     template<typename StateView>
@@ -149,7 +150,7 @@ namespace Prandtl
     inline real_t gamma(const PhysicsConstants &phys, const StateLayout &L,
                         const StateView &S) const
     {
-      return bilinear_interpolate(L.gamma_eq_idx, phys, L, S);
+      return property_lookup(L.gamma_eq_idx, phys, L, S);
     }
 
     template<typename StateView>
@@ -157,7 +158,7 @@ namespace Prandtl
     inline real_t temperature(const PhysicsConstants &phys, const StateLayout &L,
                               const StateView &S) const
     {
-      return bilinear_interpolate(L.T_idx, phys, L, S);
+      return temp_from_internal_energy(phys, L, S);
     }
 
     template<typename StateView>
@@ -176,7 +177,7 @@ namespace Prandtl
     inline real_t sound_speed(const PhysicsConstants &phys, const StateLayout &L,
                               const StateView &S) const
     {
-      return bilinear_interpolate(L.c_idx, phys, L, S);
+      return property_lookup(L.c_idx, phys, L, S);
     }
     
     template<typename StateView>
@@ -184,7 +185,7 @@ namespace Prandtl
     inline real_t cv(const PhysicsConstants &phys, const StateLayout &L,
                      const StateView &S) const
     {
-      return bilinear_interpolate(L.cv_idx, phys, L, S);
+      return property_lookup(L.cv_idx, phys, L, S);
     }
 
     template<typename StateView>
@@ -192,7 +193,7 @@ namespace Prandtl
     inline real_t cp(const PhysicsConstants &phys, const StateLayout &L,
                      const StateView &S) const
     {
-        return cv(phys, L, S) * gamma(phys, L, S);
+        return property_lookup(L.cp_idx, phys, L, S);
     }
 
     template<typename StateView>
@@ -200,7 +201,7 @@ namespace Prandtl
     inline real_t entropy(const PhysicsConstants &phys, const StateLayout &L,
                           const StateView &S) const
     {
-      return bilinear_interpolate(L.s_idx, phys, L, S);
+      MFEM_ABORT("CL ALERT : Dont have it in plato tables and also not needed");
       return 0.0;
     }
 
@@ -209,15 +210,9 @@ namespace Prandtl
     inline void entropy_state(const PhysicsConstants &phys, const StateLayout &L,
                               const InStateView &S, OutStateView &E) const
     {
-      const real_t p    = pressure(phys, L, S);
-      const real_t rho  = S.mass(L);
       const real_t T    = temperature(phys, L, S);
-      const real_t s    = entropy(phys, L, S);
-      const real_t e    = specific_internal_energy(phys, L, S);
-      const real_t v2o2 = kinetic_energy_density(phys, L, S) / rho;
       const real_t beta = 1/T;
-
-      const real_t ent_1 = (e + p/rho - v2o2)*beta - s;
+      const real_t ent_1 = 0.0;
 
       E.set_mass(L, ent_1);
       int dim = L.dim;
@@ -292,8 +287,51 @@ namespace Prandtl
 
     template<typename StateView>
     MFEM_HOST_DEVICE
-    inline real_t bilinear_interpolate(int property_idx, const PhysicsConstants &phys,
-                                       const StateLayout &L, const StateView &S) const
+    inline real_t property_lookup(int property_idx, const PhysicsConstants &phys,
+                                      const StateLayout &L, const StateView &S) const
+    {
+      real_t T = temp_from_internal_energy(phys, L, S);
+      return biinterp_lte_table(property_idx, phys, L, S, T);
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline real_t temp_from_internal_energy(const PhysicsConstants &phys, const StateLayout &L,
+                                           const StateView &S) const
+    {
+      real_t rho = density(phys, L, S);
+      real_t e = specific_internal_energy(phys, L, S);
+      real_t T = biinterp_inverse_table(phys, L, S);
+
+      real_t tol = 1e-12;
+      real_t res = 1;
+
+      int iter = 0;
+
+      while(res > tol)
+      {
+        real_t e_guess  = biinterp_lte_table(L.e_idx, phys, L, S, T);
+        real_t cv = biinterp_lte_table(L.cv_idx, phys, L, S, T);
+
+        res = (e - e_guess)/cv;
+
+        T = T + res;
+        res = std::abs(res)/T;
+
+        iter++;
+        if(iter > 100)
+        {
+          MFEM_ABORT("Newton method did not converge in temp_from_internal_energy");
+        }
+      }
+      
+      return T;
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline real_t biinterp_inverse_table(const PhysicsConstants &phys, const StateLayout &L,
+                                       const StateView &S) const
     {
       /*
       * Q01--------Q11
@@ -303,15 +341,13 @@ namespace Prandtl
       * Q00--------Q10
       */
 
-      // Point rho and rhoe values
+      // Point rho and e values
       real_t rho  = density(phys, L, S);
       real_t e = specific_internal_energy(phys, L, S);
 
-      // CL NOTE : Find a way to make a good first guess of l_x and l_y (because we are not storing it in cache)
-
       // Get the lower and upper x and y indices of the cell
-      int l_y = hunt(phys.e_grid, L.ny, e, 0);
       int l_x = hunt(phys.rho_grid, L.nx, rho, 0);
+      int l_y = hunt(phys.e_grid, L.ny, e, 0);
       int u_x = l_x + 1  , u_y = l_y + 1;
 
       if(l_x < 0 || u_x >= L.nx || l_y < 0 || u_y >= L.ny)
@@ -328,6 +364,51 @@ namespace Prandtl
       real_t e_l = phys.e_grid[l_y], e_u = phys.e_grid[u_y];
 
       // Get the corner property values
+      real_t Q00 = phys.inv_table[L.lte_property_index(0, l_x, l_y)];
+      real_t Q01 = phys.inv_table[L.lte_property_index(0, l_x, u_y)];
+      real_t Q10 = phys.inv_table[L.lte_property_index(0, u_x, l_y)];
+      real_t Q11 = phys.inv_table[L.lte_property_index(0, u_x, u_y)];
+
+
+      real_t wx = (rho  - rho_l)  / (rho_u - rho_l);
+      real_t wy = (e - e_l) / (e_u - e_l);
+
+
+      // Clamp to [0, 1]
+      wx = std::max(real_t(0), std::min(real_t(1), wx));
+      wy = std::max(real_t(0), std::min(real_t(1), wy));
+
+
+      return Q00 * ((1 - wx) * (1 - wy)) + Q01 * ((1 - wx) * wy) +
+            Q10 * (wx * (1 - wy)) + Q11 * (wx * wy);
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline real_t biinterp_lte_table(int property_idx, const PhysicsConstants &phys,
+                                       const StateLayout &L, const StateView &S,
+                                       const real_t T) const
+    {
+      /*
+      * Q01--------Q11
+      *  |          |
+      *  |          |
+      *  |          |
+      * Q00--------Q10
+      */
+
+      real_t rho  = density(phys, L, S);
+
+      // Get the lower and upper x and y indices of the cell
+      int l_x = hunt(phys.rho_grid, L.nx, rho, 0);
+      int l_y = hunt(phys.T_grid, L.ny, T, 0);
+      int u_x = l_x + 1  , u_y = l_y + 1;
+
+      // Get the lower and upper x and y coordinates of the cell
+      real_t rho_l  = phys.rho_grid[l_x] , rho_u = phys.rho_grid[u_x];
+      real_t T_l = phys.T_grid[l_y], T_u = phys.T_grid[u_y];
+
+      // Get the corner property values
       real_t Q00 = phys.lte_table[L.lte_property_index(property_idx, l_x, l_y)];
       real_t Q01 = phys.lte_table[L.lte_property_index(property_idx, l_x, u_y)];
       real_t Q10 = phys.lte_table[L.lte_property_index(property_idx, u_x, l_y)];
@@ -335,7 +416,7 @@ namespace Prandtl
 
 
       real_t wx = (rho  - rho_l)  / (rho_u - rho_l);
-      real_t wy = (e - e_l) / (e_u - e_l);
+      real_t wy = (T - T_l) / (T_u - T_l);
 
 
       // Clamp to [0, 1]

@@ -23,7 +23,9 @@ namespace Prandtl
     real_t mu;
 
     const real_t *lte_table = nullptr;
+    const real_t *inv_table = nullptr;
     const real_t *rho_grid  = nullptr;
+    const real_t *T_grid    = nullptr;
     const real_t *e_grid = nullptr;
 
     MFEM_HOST_DEVICE PhysicsConstants() = default;
@@ -35,13 +37,14 @@ namespace Prandtl
         gammaM1_gammaInverse(gammaM1 * gammaInverse), gamma_gammaM1Inverse(gamma * gammaM1Inverse),
         PrInverse(1.0 / Pr), cp(gamma_gammaM1Inverse * R_gas) {}
 
-    PhysicsConstants(const real_t* lte_table, const real_t* rho_grid, const real_t* e_grid)
+    PhysicsConstants(const real_t* lte_table, const real_t* inv_table, const real_t* rho_grid, const real_t* e_grid, const real_t* T_grid)
       : gamma(0), Pr(0), R_gas(0), mu(0),
         gammaInverse(0), gammaM1(0), gammaP1(0),
         gammaM1Inverse(0), gammaP1Inverse(0),
         gammaM1_gammaInverse(0), gamma_gammaM1Inverse(0),
         PrInverse(0), cp(0),
-        lte_table(lte_table), rho_grid(rho_grid), e_grid(e_grid) {}
+        lte_table(lte_table), rho_grid(rho_grid), T_grid(T_grid),
+        inv_table(inv_table), e_grid(e_grid) {}
 
     real_t mu_bulk = 2.0 / 3.0;
     real_t mu0 = 1.716e-5;

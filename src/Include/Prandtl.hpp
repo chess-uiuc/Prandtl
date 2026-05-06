@@ -16,6 +16,7 @@
 #include "LiftingBR1.hpp"
 
 #include "GasModel.hpp"
+#include "LteTable.hpp"
 #include "DGSEMIntegrator.hpp"
 #include "BasicOperations.hpp"
 #include "ModalBasis.hpp"
