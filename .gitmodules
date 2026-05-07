@@ -10,3 +10,6 @@
 [submodule "libs/Mutationpp"]
 	path = libs/Mutationpp
 	url = https://github.com/mutationpp/Mutationpp.git
+[submodule "libs/plato"]
+	path = libs/plato
+	url = https://github.com/chess-uiuc/plato.git
