@@ -352,45 +352,44 @@ void Simulation::LoadConfig(const std::string &config_file_path)
     num_dofs_system = vfes->GetVSize();
 
 #ifdef LTE_EOS
-    // int num_properties = 9; // CL NOTE : Check LTE EOS
+    int num_properties = 9; // CL NOTE : Check LTE EOS
+    mixture = runtime.value("gas_mixture", "air_5");
 
-    // gas_mixture = runtime.value("gas_mixture", "air_5");
-    // gas_composition = runtime.value("gas_composition", "N:0.79, O:0.21");
+    N_rho    = runtime.value("N_rho", 101);
+    N_T   = runtime.value("N_e", 101);
+    rho_min  = runtime.value("rho_min", 0.9);
+    rho_max  = runtime.value("rho_max", 1.1);
+    T_min = runtime.value("T_min", 250.0);
+    T_max = runtime.value("T_max", 300.0);
 
-    // N_rho    = runtime.value("N_rho", 100);
-    // N_e   = runtime.value("N_e", 100);
-    // rho_min  = runtime.value("rho_min", 0.9);
-    // rho_max  = runtime.value("rho_max", 1.1);
-    // e_min = runtime.value("e_min", 100000.0);
-    // e_max = runtime.value("e_max", 1000000.0);
+    mixture = runtime.value("gas_mixture", "air_5");
+    solver  = runtime.value("solver", "LTE_table_rhoT_(air5)");
+    path    = runtime.value("database_path","");
 
-    // rho_grid.SetSize(N_rho);
-    // e_grid.SetSize(N_e);
-    // lte_table.SetSize(N_rho * N_e * num_properties);
+    lte_table.SetSize(N_rho * N_T * num_properties);
 
-    // real_t rho_step = (rho_max - rho_min) / (N_rho - 1);
-    // real_t e_step = (e_max - e_min) / (N_e - 1);
+    uniform_grid(N_rho, rho_min, rho_max, rho_grid);
+    uniform_grid(N_T, T_min, T_max, T_grid);
 
-    // // Generate LTE table using Mutation++
-    // Mutation::MixtureOptions opts(gas_mixture);
-    // opts.setStateModel("Equil");
-    // opts.setThermodynamicDatabase("RRHO");              // Default thermodynamic data base
-    // opts.setViscosityAlgorithm("Chapmann-Enskog_LDLT"); // Viscosity algorithm
-    // Mutation::Mixture mix(opts);                        // Initializing mixture object
-    // mix.addComposition(gas_composition.c_str(), true);           // composition
+    stateLayout = std::make_shared<StateLayout>(dim, num_dofs_scalar, N_rho, N_T);
 
-    // for(int ind_x=0; ind_x < N_rho; ind_x++) rho_grid[ind_x] = rho_min + ind_x * rho_step;
-    // for(int ind_y=0; ind_y < N_e; ind_y++) e_grid[ind_y] = e_min + ind_y * e_step + mix.mixtureHMass(0.0000001);
+    lte_table = 0.0;
+    fill_lte_table(*stateLayout, rho_grid.GetData(), T_grid.GetData(), 
+                    solver.c_str(), mixture.c_str(), path.c_str(),
+                    lte_table.GetData(), e_min, e_max, pmesh->GetComm());
 
-    // stateLayout = std::make_shared<StateLayout>(dim, num_dofs_scalar, N_rho, N_e);
+    MPI_Allreduce(MPI_IN_PLACE, lte_table.GetData(), N_rho * N_T * num_properties, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+    MPI_Allreduce(MPI_IN_PLACE, &e_min, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
+    MPI_Allreduce(MPI_IN_PLACE, &e_max, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
-    // lte_table = 0.0;
-    // fill_lte_table(mix, *stateLayout, rho_grid.GetData(), e_grid.GetData(), lte_table.GetData(), pmesh->GetComm());
+    uniform_grid(N_T, e_min, e_max, e_grid);
+    inv_table.SetSize(N_rho * N_T);
 
-    // MPI_Allreduce(MPI_IN_PLACE, lte_table.GetData(), N_rho * N_e * num_properties, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+    fill_inv_table(*stateLayout, rho_grid.GetData(), e_grid.GetData(), inv_table.GetData(), pmesh->GetComm());
+    MPI_Allreduce(MPI_IN_PLACE, inv_table.GetData(), N_rho * N_T, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
 
-    // physicsConstants = std::make_shared<PhysicsConstants>(lte_table.HostRead(), rho_grid.HostRead(), e_grid.HostRead());
-    // gasModel = std::make_shared<ActiveGasModel>(*physicsConstants, *stateLayout, LTEGasEOS{}, LTETransport{});
+    physicsConstants = std::make_shared<PhysicsConstants>(lte_table.HostRead(), inv_table.HostRead(), rho_grid.HostRead(), T_grid.HostRead(), e_grid.HostRead());
+    gasModel = std::make_shared<ActiveGasModel>(*physicsConstants, *stateLayout, LTEGasEOS{}, LTETransport{});
 #else
     physicsConstants = std::make_shared<PhysicsConstants>(
         runtime.value("gamma", 1.4),

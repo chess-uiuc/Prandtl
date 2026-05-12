@@ -27,6 +27,8 @@ find_package(MPI REQUIRED)
 find_package(mutation++ REQUIRED)
 find_package(Eigen3 REQUIRED)
 
+set(PLATO_DIR "${CMAKE_SOURCE_DIR}/libs/plato/install")
+
 add_executable(${PROJECT_NAME} main.cpp)
 
 # --- Python Script for Compile Definitions ---
@@ -218,12 +220,22 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC ${CMAKE_SOURCE_DIR}/TestCases/LTE/Euler/LTEBlob
     )
 
+target_include_directories(${PROJECT_NAME}
+    PRIVATE ${PLATO_DIR}/include
+)
+
+target_link_directories(${PROJECT_NAME}
+    PRIVATE ${PLATO_DIR}/lib
+)
+
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
     ${PRANDTL_MFEM_TARGET}
     MPI::MPI_CXX
     mutation++::mutation++
     Eigen3::Eigen
+    plato
+    gfortran
 )
 
 if (BUILD_TESTING)

@@ -51,6 +51,24 @@ mkdir -p install
 mkdir build && cd build
 cmake -DCMAKE_INSTALL_PREFIX:PATH="$(cd ../install/ && pwd)" ..
 make -j 8 install
+cd "$PROJECT_ROOT"
+
+# --- Build Plato ---
+echo "--- Building Parallel Plato ---"
+cd libs/plato
+rm -rf install
+mkdir -p install
+make distclean || true
+./autogen.sh
+./configure \
+    FC="${FC:=gfortran}" \
+    CC="${CC:=gcc}" \
+    CXX="${CXX:=g++}" \
+    --prefix="$(pwd)/install"
+make
+make install
+cd "$PROJECT_ROOT"
+
 
 # --- Step 4: Build GLVis ---
 if [ "$IS_HPC" = false ]; then

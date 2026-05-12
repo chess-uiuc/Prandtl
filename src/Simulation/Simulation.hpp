@@ -2,6 +2,7 @@
 
 #include "mfem.hpp"
 #include "Prandtl.hpp"
+#include "LteTable.hpp"
 
 namespace Prandtl
 {
@@ -115,13 +116,11 @@ private:
   std::unique_ptr<mfem::Device> device_;
 
 #ifdef LTE_EOS
-  int    N_rho, N_T;
-  std::string gas_mixture, gas_composition;
+  int N_rho, N_T;
+  real_t rho_min, rho_max, T_min, T_max, e_min, e_max;
+  std::string solver, mixture, path;
   mfem::Vector rho_grid, T_grid, lte_table;
   mfem::Vector e_grid, inv_table;
-
-  void fill_lte_table(Mutation::Mixture& mix, const StateLayout& stateLayout, const real_t* rho_grid,
-                      const real_t* e_grid, real_t* lte_table, MPI_Comm comm) const;
 #endif
 
 #ifdef AXISYMMETRIC
