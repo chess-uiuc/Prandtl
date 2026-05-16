@@ -12,4 +12,4 @@
 	url = https://github.com/mutationpp/Mutationpp.git
 [submodule "libs/plato"]
 	path = libs/plato
-	url = https://github.com/Cherithl/plato-cherith-main.git
+	url = https://github.com/chess-uiuc/plato.git
