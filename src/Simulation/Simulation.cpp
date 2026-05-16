@@ -356,7 +356,7 @@ void Simulation::LoadConfig(const std::string &config_file_path)
     mixture = runtime.value("gas_mixture", "air_5");
 
     N_rho    = runtime.value("N_rho", 101);
-    N_T   = runtime.value("N_e", 101);
+    N_T   = runtime.value("N_T", 101);
     rho_min  = runtime.value("rho_min", 0.9);
     rho_max  = runtime.value("rho_max", 1.1);
     T_min = runtime.value("T_min", 250.0);
@@ -388,7 +388,11 @@ void Simulation::LoadConfig(const std::string &config_file_path)
     fill_inv_table(*stateLayout, rho_grid.GetData(), e_grid.GetData(), inv_table.GetData(), pmesh->GetComm());
     MPI_Allreduce(MPI_IN_PLACE, inv_table.GetData(), N_rho * N_T, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
 
-    physicsConstants = std::make_shared<PhysicsConstants>(lte_table.HostRead(), inv_table.HostRead(), rho_grid.HostRead(), T_grid.HostRead(), e_grid.HostRead());
+    physicsConstants = std::make_shared<PhysicsConstants>(lte_table.HostRead(),
+        inv_table.HostRead(),
+        rho_grid.HostRead(),
+        T_grid.HostRead(),
+        e_grid.HostRead());
     gasModel = std::make_shared<ActiveGasModel>(*physicsConstants, *stateLayout, LTEGasEOS{}, LTETransport{});
 #else
     physicsConstants = std::make_shared<PhysicsConstants>(

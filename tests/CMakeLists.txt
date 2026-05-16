@@ -63,11 +63,15 @@ add_executable(table_lookup_tests
     unit_test_main.cpp
     ${PROJECT_SOURCE_DIR}/src/BasicOperations/BasicOperations.cpp
     table_lookup_test.cpp
+    plato_lte_eos_test.cpp
 )
 
 # Mutation++ local install prefix
 set(MUTATIONPP_PREFIX ${PROJECT_SOURCE_DIR}/libs/Mutationpp/install)
 set(MUTATIONPP_DATA   ${PROJECT_SOURCE_DIR}/libs/Mutationpp/data)
+
+# PLATO local install prefix
+set(PLATO_DIR "${PROJECT_SOURCE_DIR}/libs/plato/install")
 
 target_include_directories(table_lookup_tests
     PRIVATE
@@ -76,6 +80,7 @@ target_include_directories(table_lookup_tests
     ${PROJECT_SOURCE_DIR}/src/Device
     ${MUTATIONPP_PREFIX}/include
     ${PROJECT_SOURCE_DIR}/libs/Mutationpp/data
+    ${PLATO_DIR}/include
 )
 
 target_link_directories(table_lookup_tests
@@ -83,6 +88,7 @@ target_link_directories(table_lookup_tests
     PUBLIC ${PROJECT_SOURCE_DIR}/libs/hypre/src/lib
     PUBLIC ${PROJECT_SOURCE_DIR}/libs/metis-5.1.0/lib
     PUBLIC ${MUTATIONPP_PREFIX}/lib
+    PUBLIC ${PLATO_DIR}/lib
 )
 
 target_link_libraries(table_lookup_tests
@@ -91,6 +97,8 @@ target_link_libraries(table_lookup_tests
     MPI::MPI_CXX
     mutation++::mutation++
     Eigen3::Eigen
+    plato
+    gfortran
 )
 
 add_test(NAME TableLookupTestingSuite COMMAND table_lookup_tests)
