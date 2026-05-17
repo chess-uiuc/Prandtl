@@ -37,14 +37,10 @@ namespace Prandtl
   }
 
   inline void fill_lte_table(const StateLayout &L, const real_t* rho_grid, const real_t* T_grid,
-                             const char* solver, const char* mixture, const char* path,
                              real_t* lte_table, real_t &e_min, real_t &e_max, MPI_Comm comm)
   {
 
     real_t UKB = 1.380649e-23;
-
-    std::string empty_str = "empty";
-    plato_initialize(solver, mixture, empty_str.c_str(), empty_str.c_str(), path);
 
     int nb_comp = plato_get_nb_comp();
     int nb_spec = plato_get_nb_species();
@@ -166,7 +162,7 @@ namespace Prandtl
 
   }
 
-  inline void fill_inv_table(const StateLayout &L, const real_t* rho_grid, const real_t* e_grid, real_t* inv_table, MPI_Comm comm)
+  inline void fill_inv_table(const StateLayout &L, const real_t* rho_grid, const real_t* e_grid, const real_t* T_grid, real_t* inv_table)
   {
     int nb_comp = plato_get_nb_comp();
     int nb_spec = plato_get_nb_species();
@@ -178,58 +174,44 @@ namespace Prandtl
     real_t rho, e0, e, res, cv;
     real_t tol = 1e-8;
 
-    int myRank, numProcs;
-    MPI_Comm_rank(comm, &myRank);
-    MPI_Comm_size(comm, &numProcs);
-
-    const int total_cells = L.nx * L.ny;
-    const int k0 = (myRank * total_cells) / numProcs;
-    const int k1 = ((myRank + 1) * total_cells) / numProcs;
-
     int i_new=-1;
-    for(int k=k0; k < k1; k++)
+    int flag = 0;
+    real_t T = T_grid[0];
+    for(int i = 0; i < L.nx; i++)
     {
-      int i = k / L.ny;
-      int j = k % L.ny;
-
-      res = 1.0;
       rho = rho_grid[i];
-      e0  = e_grid[j];
-      real_t T = 1000.0;
-      int flag = 0;
-      int it = 0;
-      // if(i_new != i)
-      // {
-      //   yc = 1.0;
-      //   i_new = i;
-      // }
-      yc = 1.0;
-
-      // Newton iteration to find T such that internal energy at (rho, T) matches e0
-      while(res > tol)
+      T = T_grid[0];
+      for(int j = 0; j < L.ny; j++)
       {
-        temp = T;
-        plato_get_eq_composition_mass(&rho, &T, yc.GetData(), yi.GetData(), &flag);
-        plato_get_species_energy(temp.GetData(), ei.GetData());
-        e = dot_product(yi.GetData(), ei.GetData(), nb_spec);
-        cv = plato_get_eq_cv(&rho, &T, yi.GetData());
-
-        res = -(e - e0)/cv;
-        T += res;
-        it++;
-        res = std::abs(res)/T;
-
-        if(it > 100)
+        e0  = e_grid[j];
+        res = 1.0;
+        yc = 1.0;
+        int it = 0;
+        // Newton iteration to find T such that internal energy at (rho, T) matches e0
+        while(res > tol)
         {
-          MFEM_ABORT("Maximum number of iterations reached in fill_inv_table");
+          temp = T;
+          plato_get_eq_composition_mass(&rho, &T, yc.GetData(), yi.GetData(), &flag);
+          plato_get_species_energy(temp.GetData(), ei.GetData());
+          e = dot_product(yi.GetData(), ei.GetData(), nb_spec);
+          cv = plato_get_eq_cv(&rho, &T, yi.GetData());
+
+          res = -(e - e0)/cv;
+          T += res;
+          it++;
+          res = std::abs(res)/T;
+
+          if(it > 100)
+          {
+            MFEM_ABORT("Maximum number of iterations reached in fill_inv_table");
+          }
+          if(T<0.0)
+          {
+            MFEM_ABORT("Negative temperature encountered in fill_inv_table");
+          }
         }
-        if(T<0.0)
-        {
-          MFEM_ABORT("Negative temperature encountered in fill_inv_table");
-        }
+        inv_table[L.lte_property_index(0 , i, j)] = T;
       }
-      inv_table[L.lte_property_index(0 , i, j)] = T;
     }
-    plato_finalize();
   }
 }

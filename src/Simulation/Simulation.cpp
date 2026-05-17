@@ -374,8 +374,9 @@ void Simulation::LoadConfig(const std::string &config_file_path)
     stateLayout = std::make_shared<StateLayout>(dim, num_dofs_scalar, N_rho, N_T);
 
     lte_table = 0.0;
-    fill_lte_table(*stateLayout, rho_grid.GetData(), T_grid.GetData(), 
-                    solver.c_str(), mixture.c_str(), path.c_str(),
+    std::string empty_str = "empty";
+    plato_initialize(solver.c_str(), mixture.c_str(), empty_str.c_str(), empty_str.c_str(), path.c_str());
+    fill_lte_table(*stateLayout, rho_grid.GetData(), T_grid.GetData(),
                     lte_table.GetData(), e_min, e_max, pmesh->GetComm());
 
     MPI_Allreduce(MPI_IN_PLACE, lte_table.GetData(), N_rho * N_T * num_properties, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
@@ -385,7 +386,12 @@ void Simulation::LoadConfig(const std::string &config_file_path)
     uniform_grid(N_T, e_min, e_max, e_grid);
     inv_table.SetSize(N_rho * N_T);
 
-    fill_inv_table(*stateLayout, rho_grid.GetData(), e_grid.GetData(), inv_table.GetData(), pmesh->GetComm());
+    if(Mpi::Root())
+    {
+      std::cout << "Constructing inverse table T = T(rho, e)" << std::endl;
+      fill_inv_table(*stateLayout, rho_grid.GetData(), e_grid.GetData(), T_grid.GetData(), inv_table.GetData());
+    }
+    plato_finalize();
     MPI_Allreduce(MPI_IN_PLACE, inv_table.GetData(), N_rho * N_T, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
 
     physicsConstants = std::make_shared<PhysicsConstants>(lte_table.HostRead(),
