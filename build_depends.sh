@@ -43,16 +43,6 @@ cmake ../ -DMFEM_USE_METIS_5=YES -DMFEM_USE_MPI=YES
 make -j 4
 cd ../../../
 
-# --- Build Mutation++
-echo "--- Building Parallel Mutation++ ---"
-cd libs/Mutationpp
-rm -rf build install
-mkdir -p install
-mkdir build && cd build
-cmake -DCMAKE_INSTALL_PREFIX:PATH="$(cd ../install/ && pwd)" ..
-make -j 8 install
-cd "$PROJECT_ROOT"
-
 # --- Build Plato ---
 echo "--- Building Parallel Plato ---"
 cd libs/plato
@@ -68,7 +58,6 @@ make distclean || true
 make
 make install
 cd "$PROJECT_ROOT"
-
 
 # --- Step 4: Build GLVis ---
 if [ "$IS_HPC" = false ]; then

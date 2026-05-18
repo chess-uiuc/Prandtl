@@ -24,7 +24,6 @@ endif()
 
 find_package(MPI REQUIRED)
 
-find_package(mutation++ REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 set(PLATO_DIR "${CMAKE_SOURCE_DIR}/libs/plato/install")
@@ -232,7 +231,6 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE
     ${PRANDTL_MFEM_TARGET}
     MPI::MPI_CXX
-    mutation++::mutation++
     Eigen3::Eigen
     plato
     gfortran

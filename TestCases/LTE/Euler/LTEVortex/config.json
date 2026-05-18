@@ -2,14 +2,14 @@
     "compileTime":
     {
         "PARABOLIC": false,
-        "SUBCELL_FV_BLENDING": true,
+        "SUBCELL_FV_BLENDING": false,
         "SUTHERLAND": false,
         "USE_FILTER": false
     },
     "runTime":
     {
         "order": 3,
-        "dim" : 2, 
+        "dim" : 2,
         "num_equations": 4,
 
         "precision": 15,
@@ -29,14 +29,17 @@
 
         "ser_ref_levels": 3,
 
-        "gas_mixture": "air_5",
-        "gas_composition": "N:0.79, O:0.21",
-        "N_rho": 1000,
-        "N_e" : 1000,
-        "rho_min":  0.6,
-        "rho_max": 1.4,
-        "e_min": 160000.0,
-        "e_max": 240000.0,
+        "gas_mixture": "air5",
+        "solver": "LTE_table_rhoT_(air5)",
+        "database_path": "/home/cherith2/Workspace/SOURCE_CODES/database",
+        "N_rho": 101,
+        "N_T" : 101,
+        "rho_min":  0.01,
+        "rho_max": 1.1,
+        "T_min": 200.0,
+        "T_max": 350.0,
+        "rho_dist": "log",
+        "T_dist": "log",
 
         "mesh_file": "LTEVortex.mesh",
         "conditions":
@@ -49,8 +52,8 @@
                     "x1": 0.2,
                     "x2": 10.0,
                     "x3": 1.0,
-                    "x4": 278.0,
-                    "x5": 283.0
+                    "x4": 0.1,
+                    "x5": 275.0
                 },
                 "function": "LTEVortexIC"
             }
@@ -59,4 +62,3 @@
         "ode_solver": "RK3SSP"
     }
 }
-

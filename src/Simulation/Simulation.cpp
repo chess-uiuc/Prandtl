@@ -353,7 +353,10 @@ void Simulation::LoadConfig(const std::string &config_file_path)
 
 #ifdef LTE_EOS
     int num_properties = 9; // CL NOTE : Check LTE EOS
-    mixture = runtime.value("gas_mixture", "air_5");
+
+    mixture = runtime.value("gas_mixture", "air5");
+    solver  = runtime.value("solver", "LTE_table_rhoT_(air5)");
+    path    = runtime.value("database_path","");
 
     N_rho    = runtime.value("N_rho", 101);
     N_T   = runtime.value("N_T", 101);
@@ -361,15 +364,27 @@ void Simulation::LoadConfig(const std::string &config_file_path)
     rho_max  = runtime.value("rho_max", 1.1);
     T_min = runtime.value("T_min", 250.0);
     T_max = runtime.value("T_max", 300.0);
-
-    mixture = runtime.value("gas_mixture", "air_5");
-    solver  = runtime.value("solver", "LTE_table_rhoT_(air5)");
-    path    = runtime.value("database_path","");
+    rho_dist = runtime.value("rho_dist", "log");
+    T_dist = runtime.value("T_dist", "log");
 
     lte_table.SetSize(N_rho * N_T * num_properties);
 
-    uniform_grid(N_rho, rho_min, rho_max, rho_grid);
-    uniform_grid(N_T, T_min, T_max, T_grid);
+    if (rho_dist == "log")
+    {
+        log_grid(N_rho, rho_min, rho_max, rho_grid);
+    }
+    else
+    {
+        uniform_grid(N_rho, rho_min, rho_max, rho_grid);
+    }
+    if (T_dist == "log")
+    {
+        log_grid(N_T, T_min, T_max, T_grid);
+    }
+    else
+    {
+        uniform_grid(N_T, T_min, T_max, T_grid);
+    }
 
     stateLayout = std::make_shared<StateLayout>(dim, num_dofs_scalar, N_rho, N_T);
 
@@ -392,7 +407,7 @@ void Simulation::LoadConfig(const std::string &config_file_path)
       fill_inv_table(*stateLayout, rho_grid.GetData(), e_grid.GetData(), T_grid.GetData(), inv_table.GetData());
     }
     plato_finalize();
-    MPI_Allreduce(MPI_IN_PLACE, inv_table.GetData(), N_rho * N_T, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+    MPI_Bcast(inv_table.GetData(), N_rho * N_T, MPI_DOUBLE, 0, pmesh->GetComm());
 
     physicsConstants = std::make_shared<PhysicsConstants>(lte_table.HostRead(),
         inv_table.HostRead(),

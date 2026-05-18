@@ -33,18 +33,12 @@ std::function<void(const Vector&, Vector&)> LTEBlobIC(real_t radius,
         // Gaussian temperature perturbation
         const real_t T = T_inf + (T_blob - T_inf) * exp_full;
 
-        // LTE mixture using Mutation++
-        Mutation::MixtureOptions opts("air_5");
-        opts.setStateModel("EquilTP");
-        opts.setThermodynamicDatabase("RRHO");
-        Mutation::Mixture mix(opts);
-        mix.addComposition("N:0.79, O:0.21", true);
+        real_t R_gas = 287.05;
+        const real_t gamma = 1.4;
 
-        mix.setState(&T, &P_inf);
-
-        const real_t den  = mix.density();
-        const real_t rhoe = den * mix.mixtureEnergyMass();
-        const real_t rhoE = rhoe + 0.5 * den * vel2;
+        const real_t den   = P_inf / (R_gas * T);
+        const real_t rhoe  = P_inf / (gamma-1.0);
+        const real_t rhoE  = rhoe + 0.5 * den * vel2;
 
         y(0) = den;
         y(1) = den * velX;

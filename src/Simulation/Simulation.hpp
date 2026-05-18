@@ -118,7 +118,7 @@ private:
 #ifdef LTE_EOS
   int N_rho, N_T;
   real_t rho_min, rho_max, T_min, T_max, e_min, e_max;
-  std::string solver, mixture, path;
+  std::string solver, mixture, path, rho_dist, T_dist;
   mfem::Vector rho_grid, T_grid, lte_table;
   mfem::Vector e_grid, inv_table;
 #endif
