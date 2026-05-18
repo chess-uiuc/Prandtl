@@ -29,7 +29,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             gcc-12 g++-12 gfortran-12 libgl1 libegl1 \
             mpich libmpich-dev environment-modules \
-            cmake ninja-build pkg-config ccache jq libeigen3-dev
+            cmake ninja-build pkg-config ccache jq
           echo "CC=mpicc"   >> $GITHUB_ENV
           echo "CXX=mpicxx" >> $GITHUB_ENV
           echo "FC=mpifort" >> $GITHUB_ENV
@@ -79,7 +79,7 @@ jobs:
           ls -lh libs/mfem/*/libmfem* 2>/dev/null || true
           ls -lh libs/hypre/src/hypre/lib 2>/dev/null || true
           ls -lh libs/metis-5.1.0/lib 2>/dev/null || true
-          ls -lh libs/Mutationpp/install 2>/dev/null || true
+          ls -lh libs/plato/install 2>/dev/null || true
 
       - name: Configure Prandtl (Euler)
         env:
@@ -91,15 +91,13 @@ jobs:
           MFEM_DIR: ${{ github.workspace }}/libs/mfem/build
           # HYPRE_DIR: ${{ github.workspace }}/libs/hypre/src/hypre
           # METIS_DIR: ${{ github.workspace }}/libs/metis-5.1.0
-          Eigen3_DIR: /usr/share/eigen3/cmake
-          Mutationpp_DIR: ${{ github.workspace }}/libs/Mutationpp/install/lib/cmake/Mutationpp
         run: |
           mkdir -p build-euler
           #  -DCONFIG_FILE=${CONFIG_FILE}
           cmake -S . -B build-euler -G Ninja \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
             -DBUILD_TESTING=ON \
-            -DCMAKE_PREFIX_PATH="${MFEM_DIR};${Mutationpp_DIR};${Eigen3_DIR}" \
+            -DCMAKE_PREFIX_PATH="${MFEM_DIR}" \
             -DSUBCELL_FV_BLENDING=ON
 
       - name: Build Prandtl (Euler)
@@ -128,7 +126,7 @@ jobs:
           cmake -S . -B build-cns -G Ninja \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
             -DBUILD_TESTING=ON \
-            -DCMAKE_PREFIX_PATH="${MFEM_DIR};${Mutationpp_DIR};${Eigen3_DIR}" \
+            -DCMAKE_PREFIX_PATH="${MFEM_DIR}" \
             -DPARABOLIC=ON -DSUBCELL_FV_BLENDING=ON
 
       - name: Build Prandtl (CNS)
