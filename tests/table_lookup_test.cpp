@@ -16,7 +16,6 @@ using namespace Prandtl;
 
 TEST(plato_library_init_test)
 {
-    Mpi::Init();
     // CL NOTE : To make sure the database path is correctly set and avoiding the initialization overhead in the subsequent tests.
     std::string solver  = "LTE_table_rhoT_(air5)";
     std::string mixture = "air5";
@@ -125,7 +124,7 @@ TEST(plato_Temperature_solve_test)
     real_t e_min, e_max;
 
     fill_lte_table(L, rho_grid.GetData(), T_grid.GetData(),
-                    lte_table.GetData(), e_min, e_max, MPI_COMM_SELF);
+                    lte_table.GetData(), e_min, e_max);
 
     uniform_grid(ny, e_min, e_max, e_grid);
     fill_inv_table(L, rho_grid.GetData(), e_grid.GetData(), T_grid.GetData(), inv_table.GetData());
@@ -205,7 +204,7 @@ TEST(plato_Tablelookup_test)
     real_t e_min, e_max;
 
     fill_lte_table(L, rho_grid.GetData(), T_grid.GetData(),
-                    lte_table.GetData(), e_min, e_max, MPI_COMM_SELF);
+                    lte_table.GetData(), e_min, e_max);
 
     uniform_grid(ny, e_min, e_max, e_grid);
     fill_inv_table(L, rho_grid.GetData(), e_grid.GetData(), T_grid.GetData(), inv_table.GetData());

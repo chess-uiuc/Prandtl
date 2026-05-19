@@ -2,7 +2,7 @@
 
 #include "Physics.hpp"
 #include "GasState.hpp"
-#include"plato_Cpp_library_interface.h"
+#include "plato_Cpp_library_interface.h"
 namespace Prandtl
 {
 
@@ -37,7 +37,7 @@ namespace Prandtl
   }
 
   inline void fill_lte_table(const StateLayout &L, const real_t* rho_grid, const real_t* T_grid,
-                             real_t* lte_table, real_t &e_min, real_t &e_max, MPI_Comm comm)
+                             real_t* lte_table, real_t &e_min, real_t &e_max)
   {
 
     real_t UKB = 1.380649e-23;
@@ -58,108 +58,91 @@ namespace Prandtl
 
     plato_get_Ri(Ri.GetData());
 
-    int myRank, numProcs;
-    MPI_Comm_rank(comm, &myRank);
-    MPI_Comm_size(comm, &numProcs);
-
-    const int total_cells = L.nx * L.ny;
-    const int k0 = (myRank * total_cells) / numProcs;
-    const int k1 = ((myRank + 1) * total_cells) / numProcs;
-
-    int i_new=-1;
-    for(int k=k0; k < k1; k++)
+    int flag = 0;
+    for(int i=0; i < L.nx; i++)
     {
-      int i = k / L.ny;
-      int j = k % L.ny;
-
-      // if(i_new != i)
-      // {
-      //   i_new = i;
-      //   yc = 1.0;
-      //   Xc = 1.0;
-      // }
-      yc = 1.0;
-      Xc = 1.0;
-
       const real_t rho = rho_grid[i];
-      const real_t T = T_grid[j];
-      temp = T;
-
-      int flag = 0;
-
-      // Computing LTE composition
-      plato_get_eq_composition_mass(&rho, &T, yc.GetData(), yi.GetData(), &flag);
-      plato_mass_to_mole_fractions(yi.GetData(), Xi.GetData());
-
-      // Number density and pressure
-      R  = dot_product(Ri.GetData(), yi.GetData(), nb_spec);
-      P  = rho * R * T;
-      nb = P / (UKB*T);
-
-      // Energies and enthalpy per unit-mass
-      plato_get_species_energy(temp.GetData(), ei.GetData());
-      for(int sp=0; sp < nb_spec; sp++) hi[sp] = ei[sp] + Ri[sp]*T;
-      e = dot_product(yi.GetData(), ei.GetData(), nb_spec);
-
-      // Derived thermodynamic properties
-      // isothermal compressibility, coeff of thermal expansion, cv, cp, gamma, sound_speed at equilibrium
-      betaT = plato_get_eq_isoth_comp(&P, &T, Xi.GetData());
-      alpha = plato_get_eq_coeff_th_exp(&P, &T, Xi.GetData());
-      cv    = plato_get_eq_cv(&rho, &T, yi.GetData());
-      gam   = 1.0 + alpha*alpha*T/(rho*betaT*cv);
-      cp    = gam*cv;
-      c     = std::sqrt(gam*P/rho);
-
-      // Transport properties
-      // dynamic viscosity, thermal conductivity, components of thermal conductivity
-      plato_get_transp_coeff_comp(&nb, Xi.GetData(), temp.GetData(), &mu, &sigma, &lambda_trh, &lambda_tre, lambda_int.GetData(), Di.GetData());
-
-      double eps = 1e-5;
-      double Tepsp1 = T*(1.0 + eps);
-      double Tepsm1 = T*(1.0 - eps);
-      // reactive thermal conductivity
-      // (NOTE: pass mole fractions with tolerance to procedure solving Stefan-Maxwell's equations)
-      plato_get_eq_composition_mole(&P, &Tepsp1, Xc.GetData(), Xip.GetData(), &flag);
-      plato_get_eq_composition_mole(&P, &Tepsm1, Xc.GetData(), Xim.GetData(), &flag);
-      plato_get_bin_diff_coeff(&nb, &T, &T, Xi.GetData(), Dij.GetData());
-      for(int sp=0; sp < nb_spec; sp++) di[sp] = -0.5 * (Xip[sp] - Xim[sp])/(eps*T);
-
-      double sum_Xitol = 0.0, X;
-      for(int sp=0; sp < nb_spec; sp++)
+      for(int j=0; j < L.ny; j++)
       {
-        X = Xi[sp] + X_tol;
-        Xitol[sp] = X;
-        sum_Xitol += X;
-      }
+        yc = 1.0;
+        Xc = 1.0;
 
-      sum_Xitol = 1.0/sum_Xitol;
-      for(int sp=0; sp < nb_spec; sp++) Xitol[sp] *= sum_Xitol;
+        const real_t T = T_grid[j];
+        temp = T;
 
-      plato_get_species_diff_flux(&T, &T, &nb, Xitol.GetData(), Dij.GetData(), di.GetData(), Ji.GetData());
-      lambda_reactive = dot_product(Ji.GetData(), hi.GetData(), nb_spec);
+        // Computing LTE composition
+        plato_get_eq_composition_mass(&rho, &T, yc.GetData(), yi.GetData(), &flag);
+        plato_mass_to_mole_fractions(yi.GetData(), Xi.GetData());
 
-      lte_table[L.lte_property_index(L.P_idx, i, j)] = P;
-      lte_table[L.lte_property_index(L.e_idx, i, j)] = e;
-      lte_table[L.lte_property_index(L.cv_idx, i, j)] = cv;
-      lte_table[L.lte_property_index(L.cp_idx, i, j)] = cp;
-      lte_table[L.lte_property_index(L.R_eq_idx, i, j)] = R;
-      lte_table[L.lte_property_index(L.gamma_eq_idx, i, j)] = gam;
-      lte_table[L.lte_property_index(L.c_idx, i, j)] = c;
-      lte_table[L.lte_property_index(L.mu_idx, i, j)] = mu;
-      lte_table[L.lte_property_index(L.lambda_idx, i, j)] = lambda_trh + lambda_tre + lambda_int[0] + lambda_reactive;
+        // Number density and pressure
+        R  = dot_product(Ri.GetData(), yi.GetData(), nb_spec);
+        P  = rho * R * T;
+        nb = P / (UKB*T);
 
-      if(k == k0)
-      {
-        e_min = e;
-        e_max = e;
-      }
-      else
-      {
-        e_min = std::min(e_min, e);
-        e_max = std::max(e_max, e);
+        // Energies and enthalpy per unit-mass
+        plato_get_species_energy(temp.GetData(), ei.GetData());
+        for(int sp=0; sp < nb_spec; sp++) hi[sp] = ei[sp] + Ri[sp]*T;
+        e = dot_product(yi.GetData(), ei.GetData(), nb_spec);
+
+        // Derived thermodynamic properties
+        // isothermal compressibility, coeff of thermal expansion, cv, cp, gamma, sound_speed at equilibrium
+        betaT = plato_get_eq_isoth_comp(&P, &T, Xi.GetData());
+        alpha = plato_get_eq_coeff_th_exp(&P, &T, Xi.GetData());
+        cv    = plato_get_eq_cv(&rho, &T, yi.GetData());
+        gam   = 1.0 + alpha*alpha*T/(rho*betaT*cv);
+        cp    = gam*cv;
+        c     = std::sqrt(gam*P/rho);
+
+        // Transport properties
+        // dynamic viscosity, thermal conductivity, components of thermal conductivity
+        plato_get_transp_coeff_comp(&nb, Xi.GetData(), temp.GetData(), &mu, &sigma, &lambda_trh, &lambda_tre, lambda_int.GetData(), Di.GetData());
+
+        double eps = 1e-5;
+        double Tepsp1 = T*(1.0 + eps);
+        double Tepsm1 = T*(1.0 - eps);
+        // reactive thermal conductivity
+        // (NOTE: pass mole fractions with tolerance to procedure solving Stefan-Maxwell's equations)
+        plato_get_eq_composition_mole(&P, &Tepsp1, Xc.GetData(), Xip.GetData(), &flag);
+        plato_get_eq_composition_mole(&P, &Tepsm1, Xc.GetData(), Xim.GetData(), &flag);
+        plato_get_bin_diff_coeff(&nb, &T, &T, Xi.GetData(), Dij.GetData());
+        for(int sp=0; sp < nb_spec; sp++) di[sp] = -0.5 * (Xip[sp] - Xim[sp])/(eps*T);
+
+        double sum_Xitol = 0.0, X;
+        for(int sp=0; sp < nb_spec; sp++)
+        {
+          X = Xi[sp] + X_tol;
+          Xitol[sp] = X;
+          sum_Xitol += X;
+        }
+
+        sum_Xitol = 1.0/sum_Xitol;
+        for(int sp=0; sp < nb_spec; sp++) Xitol[sp] *= sum_Xitol;
+
+        plato_get_species_diff_flux(&T, &T, &nb, Xitol.GetData(), Dij.GetData(), di.GetData(), Ji.GetData());
+        lambda_reactive = dot_product(Ji.GetData(), hi.GetData(), nb_spec);
+
+        lte_table[L.lte_property_index(L.P_idx, i, j)] = P;
+        lte_table[L.lte_property_index(L.e_idx, i, j)] = e;
+        lte_table[L.lte_property_index(L.cv_idx, i, j)] = cv;
+        lte_table[L.lte_property_index(L.cp_idx, i, j)] = cp;
+        lte_table[L.lte_property_index(L.R_eq_idx, i, j)] = R;
+        lte_table[L.lte_property_index(L.gamma_eq_idx, i, j)] = gam;
+        lte_table[L.lte_property_index(L.c_idx, i, j)] = c;
+        lte_table[L.lte_property_index(L.mu_idx, i, j)] = mu;
+        lte_table[L.lte_property_index(L.lambda_idx, i, j)] = lambda_trh + lambda_tre + lambda_int[0] + lambda_reactive;
+
+        if(i+j == 0)
+        {
+          e_min = e;
+          e_max = e;
+        }
+        else
+        {
+          e_min = std::min(e_min, e);
+          e_max = std::max(e_max, e);
+        }
       }
     }
-
   }
 
   inline void fill_inv_table(const StateLayout &L, const real_t* rho_grid, const real_t* e_grid, const real_t* T_grid, real_t* inv_table)
@@ -174,7 +157,6 @@ namespace Prandtl
     real_t rho, e0, e, res, cv;
     real_t tol = 1e-8;
 
-    int i_new=-1;
     int flag = 0;
     real_t T = T_grid[0];
     for(int i = 0; i < L.nx; i++)

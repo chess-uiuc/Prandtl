@@ -51,7 +51,7 @@ namespace Prandtl
     int P_idx        = 0;  // pressure
     int e_idx        = 1;  // internal energy
     int cv_idx       = 2;  // specific heat at constant volume
-    int cp_idx       = 3;  // equilibrium sound-speed
+    int cp_idx       = 3;  // specific heat at constant pressure
     int R_eq_idx     = 4;  // Mixture gas constant
     int gamma_eq_idx = 5;  // gamma-eq
     int c_idx        = 6;  // equilibrium sound-speed
